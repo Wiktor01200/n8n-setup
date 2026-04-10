@@ -1,0 +1,345 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Organise Lecture Slides",
+        "formDescription": "Send it summaried to Notion",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Lecture PDF:",
+              "fieldType": "file"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.5,
+      "position": [
+        0,
+        64
+      ],
+      "id": "51c2098b-c728-4485-9355-7cf734901622",
+      "name": "On form submission",
+      "webhookId": "44ca0107-dda9-4f0b-9372-04a60ddc979b"
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "binaryPropertyName": "Lecture_PDF_",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        208,
+        64
+      ],
+      "id": "31256a6b-8fd0-4163-9a31-ea05c6d49bc1",
+      "name": "Extract from File"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "llama3:latest",
+          "mode": "list",
+          "cachedResultName": "llama3:latest"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=Here are the raw lecture slide contents for a university module called \"Further Programming\". Please produce structured Notion-ready notes from this material. Also make the strucutre somewhat fun to read as a bonus.\n\n{{ $('Extract from File').item.json.text }}\n\nRemember:\n- A-Level recap content gets one brief bullet marked *(A-Level recap)* — do not expand it.\n- Degree-level or new content should be explained clearly and in full.\n- Format everything in Notion-compatible Markdown ready to paste in."
+            }
+          ]
+        },
+        "simplify": false,
+        "options": {
+          "system": "You are an expert academic note-taking assistant. Your job is to read raw lecture slide text and produce clean, well-organised study notes formatted for import into a Notion page.\n\nFollow these rules strictly:\n- Use Notion-compatible Markdown (# for H1, ## for H2, ### for H3, **bold**, - for bullets, > for callouts).\n- Organise content into clear topic sections based on the lecture's structure.\n- Within each section, separate concepts with sub-headings and concise bullet points.\n- Include any definitions, key terms, code examples, algorithms, or diagrams described in the slides.\n- At the top of the output, add a brief \"Overview\" section (2–4 sentences) summarising what the lecture covers.\n- At the bottom, add a \"Key Takeaways\" section with 3–6 bullet points.\n\nDe-emphasis rule (IMPORTANT):\nAny content that is standard A-Level Computer Science material (e.g. basic data types, simple sorting algorithms, Boolean logic, basic OOP concepts like classes/objects/inheritance, binary/hex conversion, basic networking OSI layers, simple recursion) should be flagged with the label *(A-Level recap)* and kept brief — one short bullet is enough. Do NOT expand on it. New or degree-level content should be explained in full detail."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.ollama",
+      "typeVersion": 1,
+      "position": [
+        576,
+        0
+      ],
+      "id": "fe998ea3-9bb5-471f-adec-f96bca1a781d",
+      "name": "Message a model",
+      "credentials": {
+        "ollamaApi": {
+          "id": "lYyes7digXv9FLrL",
+          "name": "Ollama account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "pageId": {
+          "__rl": true,
+          "value": "https://www.notion.so/Further-Programming-Lecture-Summarisations-329551f2c7e2808da313c3585c4ce753?showMoveTo=true&saveParent=true",
+          "mode": "url"
+        },
+        "title": "={{ $json.title }}",
+        "simple": false,
+        "blockUi": {
+          "blockValues": []
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        1392,
+        -208
+      ],
+      "id": "4012473e-0f40-4e05-bde7-380199aa5cca",
+      "name": "Create a page",
+      "credentials": {
+        "notionApi": {
+          "id": "tAfDIfvau5DqC8xN",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const text = $input.first().json.message.content; // adjust to your field name\nconst sections = text.split(/(?=^#{1,3} )/m).filter(s => s.trim());\n\nreturn sections.map(section => ({ json: { section } }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        976,
+        0
+      ],
+      "id": "2fbf7031-8d74-49e2-a9db-dd16389199e7",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = [];\n\nfor (const item of $input.all()) {\n  const text = item.json.section;\n  if (text.length <= 1800) {\n    items.push({ json: { chunk: text } });\n    continue;\n  }\n  // split at newlines without cutting mid-sentence\n  const lines = text.split('\\n');\n  let current = '';\n  for (const line of lines) {\n    if ((current + '\\n' + line).length > 1800) {\n      if (current) items.push({ json: { chunk: current.trim() } });\n      current = line;\n    } else {\n      current += (current ? '\\n' : '') + line;\n    }\n  }\n  if (current) items.push({ json: { chunk: current.trim() } });\n}\n\nreturn items;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1184,
+        0
+      ],
+      "id": "6a36d197-b32b-481a-b3d4-b69d99e3fab6",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "batchSize": "={{ 1 }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1952,
+        0
+      ],
+      "id": "bec820c1-c692-4173-85bb-f383159fc199",
+      "name": "Loop Over Items",
+      "retryOnFail": false,
+      "executeOnce": false
+    },
+    {
+      "parameters": {
+        "resource": "block",
+        "blockId": {
+          "__rl": true,
+          "value": "={{ $('Create a page').first().json.url }}",
+          "mode": "url"
+        },
+        "blockUi": {
+          "blockValues": [
+            {
+              "textContent": "={{ $json.chunk }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        2160,
+        224
+      ],
+      "id": "7000c0c9-b041-4188-9bdc-ca249ccf1879",
+      "name": "Append a block",
+      "credentials": {
+        "notionApi": {
+          "id": "tAfDIfvau5DqC8xN",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "language": "pythonNative",
+        "pythonCode": "title = _items[0][\"json\"][\"text\"]\n\nreturn [\n    {\n        \"json\": {\n            \"title\": title[:230]\n        }\n    }\n]"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        768,
+        -208
+      ],
+      "id": "fb4bc2b5-3959-4fed-9b5a-176866530d30",
+      "name": "Code in Python"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "3aa2e9df-e011-416d-b7f2-bb1d326d052a",
+              "name": "text",
+              "value": "={{ $json.text }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        512,
+        -208
+      ],
+      "id": "0cbfd6ea-b477-490f-9679-2ff9d5b8c6f0",
+      "name": "Edit Fields"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "On form submission": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a page": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Append a block",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append a block": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in Python": {
+      "main": [
+        [
+          {
+            "node": "Create a page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Code in Python",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "745e574b-b508-4830-86b0-d6e46fc7c785",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "f7926c13c4605944faa38242ee146e6949c5b1af8587967ff1468dffb9065d49"
+  },
+  "id": "dpNvGZLKS6VRY1mi",
+  "tags": []
+}
